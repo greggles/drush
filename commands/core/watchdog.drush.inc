@@ -44,6 +44,7 @@ function watchdog_drush_command() {
       'tail' => 'Continuously show new watchdog messages until interrupted.',
       'sleep-delay' => 'To be used in conjunction with --tail. This is the number of seconds to wait between each poll to the database. Delay is 1 second by default.',
       'extended' => 'Return extended information about each message.',
+      'last-seconds' => 'Show messages recorded in the last X seconds',
     ),
     'examples' => array(
       'drush watchdog-show' => 'Show a listing of most recent 10 messages.',
@@ -54,6 +55,7 @@ function watchdog_drush_command() {
       'drush watchdog-show --type=php' => 'Show a listing of most recent 10 messages of type php.',
       'drush watchdog-show --tail --extended' => 'Show a listing of most recent 10 messages with extended information about each one and continue showing messages as they are registered in the watchdog.',
       'drush watchdog-show --tail --sleep-delay=2' => 'Do a tail of the watchdog with a delay of two seconds between each poll to the database.',
+      'drush watchdog-show --last-seconds=3600' => 'Show messages recorded in the last 3600 seconds (1 hour).',
     ),
     'outputformat' => array(
       'default' => 'table',
@@ -156,8 +158,9 @@ function drush_core_watchdog_show_many($filter = NULL) {
   $severity = drush_get_option('severity');
   $tail = drush_get_option('tail', FALSE);
   $extended = drush_get_option('extended', FALSE);
+  $last_seconds = drush_get_option('last-seconds', FALSE);
 
-  $where = core_watchdog_query($type, $severity, $filter);
+  $where = core_watchdog_query($type, $severity, $filter, 'AND', $last_seconds);
   if ($where === FALSE) {
     return drush_log(dt('Aborting.'));
   }
@@ -337,10 +340,12 @@ function drush_core_watchdog_delete($arg = NULL) {
  *   String. Value to filter watchdog messages by.
  * @param $criteria
  *   ('AND', 'OR'). Criteria for the WHERE snippet.
+ * @param $last_seconds
+ *   Int seconds into the past to look for messages.
  * @return
  *   False or array with structure ('where' => string, 'args' => array())
  */
-function core_watchdog_query($type = NULL, $severity = NULL, $filter = NULL, $criteria = 'AND') {
+function core_watchdog_query($type = NULL, $severity = NULL, $filter = NULL, $criteria = 'AND', $last_seconds = NULL) {
   $args = array();
   $conditions = array();
   if ($type) {
@@ -376,6 +381,10 @@ function core_watchdog_query($type = NULL, $severity = NULL, $filter = NULL, $cr
   if ($filter) {
     $conditions[] = "message LIKE :filter";
     $args[':filter'] = '%'.$filter.'%';
+  }
+  if ($last_seconds) {
+    $conditions[] = "timestamp > :last_seconds";
+    $args[':last_seconds'] = REQUEST_TIME - $last_seconds;
   }
 
   $where = implode(" $criteria ", $conditions);
